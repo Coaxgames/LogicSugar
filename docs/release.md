@@ -41,11 +41,11 @@ classes ──► d8InputJar ──► dexAndroid ──► jarAndroid ──►
 3. 本地完整构建：`./gradlew.bat clean deploy`（需要 Android SDK 的 D8 + `android.jar`）。
 4. 撰写发布正文（初稿可存为 `release_notes_v<version>.md`）：中英对照、只写当前版本，格式见下节「发布正文风格」；发布后删除该文件，正文以 GitHub Release 为准。
 5. 核实产物：`build/libs/LogicSugar-v<version>.jar` 存在且含 `classes.dex`；`-desktop.jar` / `-android.jar` / d8-input jar 不进入发布流程。
-6. 兼容性段落（发布正文必写）：需要跨版本调试产物的用户看这条——含 `snapshot`/`profile`/`restart` 行的程序属于 `AssertEmit=emit` 的单机调试构建；同一程序在只有原版或旧版逻辑编辑器的环境里仍可运行（旧文本形式不变），但 ≤5.7.2 的 LogicSugar 打开新的 5 槽 `snapshot` 行时会把 `steps` 值当成消息显示（纯显示降级，程序照常运行），而 LogicSugar ≥5.8.0 读取旧的 3 载荷 token 文本仍然无损。
+6. 正文自检：按「发布正文风格」逐条核对——条目是整条粗体的一行话、不写括号补充与枚举清单、不写「已知问题 / 兼容性」段落。跨版本的线格式与调试产物事实写在 [architecture.md](architecture.md) / [glossary.md](glossary.md)，不逐版复述进 Release。
 
 ## 发布正文风格（Release body）
 
-发布正文就是 GitHub Release 的正文原文（Neon 聚合侧对应 `RELEASE_NOTES.md`），**只写当前版本**、中英对照；仓库只在发布当次临时保留草稿文件。当前范式于 2026-09-25 二次收敛（v5.4.0 范例，用户改写）：正文只保留一行式用户条目，开发期反馈与未发布功能的内部问题不写进 Release。
+发布正文就是 GitHub Release 的正文原文（Neon 聚合侧对应 `RELEASE_NOTES.md`），**只写当前版本**、中英对照；仓库只在发布当次临时保留草稿文件。范式经三次收敛，当前定稿为 v5.9.0（2026-10-11，用户定稿）：正文只有「本次新增 / 本次修复」两个小节，每条是**整条粗体的一行话**，不写括号补充、枚举清单与「已知问题」段落；开发期反馈与未发布功能的内部问题不写进 Release。
 
 ````markdown
 > [!NOTE]
@@ -56,25 +56,35 @@ classes ──► d8InputJar ──► dexAndroid ──► jarAndroid ──►
 
 ### 本次新增
 
-- **支持从原版 Mlog 中解析为 LogicSugar 特有的高级控制流**（例如 Switch / If）
-- **使用 OP / Expr 对 @counter 进行常量操作时，可以在积木左侧预览类 Jump 跳转线的 @counter 跳转线**
+- **变量界面的显示开关会被记住**
+- **性能分析器支持百分比视图**
+
+### 本次修复
+
+- **原版积木的悬停说明恢复显示**
+- **失败的断言与 `error` 指令现在会停机**
 
 ## English
 
 ### Added
 
-- **Parse vanilla mlog back into LogicSugar's structured control flow** (Switch / If, for example)
-- **Constant @counter writes from OP / Expr cards preview a Jump-like @counter line on the left of the block**
+- **The Vars screen remembers your display switches**
+- **Profiler statistics support percentage view**
+
+### Fixed
+
+- **Vanilla statements show their hover hints again**
+- **Failed assertions and `error` now stop the processor**
 ````
 
 写作规则：
 1. **结构固定**：顶部只有一个 `> [!NOTE]` 两行引用块（中文一行 + 英文一行）写版本要求，然后 `## 中文`、`## English`。不再用 `> [!IMPORTANT]`，也不写构建命令、产物路径、测试数量与 commit 细节。
-2. **小节**：`### 本次新增` / `### 本次修复` / `### 本次改动` / `### 已知问题`，英文对应 `### Added` / `### Fixed` / `### Changed` / `### Known issues`；只保留本版真正涉及的小节，中英小节一一对应。
-3. **条目只写一行**：以 `**粗体短标题**` 开头（英文 `**Bold lead-in**`），必要时用括号补一个例子，一句话讲**用户能感知到的结果**；不解释技术细节（类名、方法名、测试名、内部机制与实现原因都不写，留在 commit message 与 `docs/`）。
-4. **「本次修复」只写上一个已发布版本里用户能碰到的问题**：开发过程中用户反馈的问题、同一版本内新功能的内部缺陷，用户从未在任何已发布版本里见过，不构成「修复」，不写进 Release；功能首次发布只写它新增的能力。没有上一版真实缺陷时，整个「本次修复」小节省略。
-5. **粒度**：一条一件事，同主题合并；宁可少写，也不堆细节。
+2. **小节**：默认只有 `### 本次新增` / `### 本次修复`（英文 `### Added` / `### Fixed`）；本版确有行为变化、又归不进「修复」时才加 `### 本次改动` / `### Changed`。**不写「已知问题 / 兼容性」小节**：跨版本线格式与调试产物事实写在 [architecture.md](architecture.md) / [glossary.md](glossary.md)，不逐版复述。中英小节一一对应。
+3. **条目就是一句完整的粗体话**：整条加粗、一行写完，例如 `**原版积木的悬停说明恢复显示**`。不写括号补充、不写「（A / B / C）」式枚举清单、也不在粗体后接解释尾巴；枚举与实现细节留在设置描述、提交信息与 `docs/`。
+4. **篇幅**：全篇最多 3 个小节、条目总数不超过 6 条；常见形态就是两小节各 2 条。一条一件事，同主题合并，宁可少写。
+5. **「本次修复」只写上一个已发布版本里用户能碰到的问题**：开发过程中用户反馈的问题、同一版本内新功能的内部缺陷，用户从未在任何已发布版本里见过，不构成「修复」，不写进 Release；功能首次发布只写它新增的能力。没有上一版真实缺陷时，「本次修复」整节省略。
 6. **语言**：中文用中文标点与引号，英文用半角标点；两边各自通顺，不逐字直译。
-7. **历史不回填**：新版本一律按本范式写；历史正文以各版本的 GitHub Release 为准（v5.3.1 是格式定稿依据，其正文已随 Release 上线）。
+7. **历史不回填**：新版本一律按本范式写；历史正文以各版本的 GitHub Release 为准（v5.9.0 是当前定稿范例，v5.4.0 / v5.3.1 是历史依据）。
 
 ## Release 资产安全规则
 
