@@ -9,6 +9,7 @@
 - **Android 打包**（只有要出 dex 时才需要）：本地 Android SDK 的 D8 与至少一个 platform 的 `android.jar`，按 `D8_PATH` → `ANDROID_SDK_ROOT` / `ANDROID_HOME` 顺序探测；缺失时 `dexAndroid` 直接失败。
 - `gradle.properties` 给 Gradle JVM 加了 `jdk.compiler` 多个包的 `--add-exports` 与 `--illegal-access=permit`，属环境基础设施，勿随意删减。
 - Windows 下命令用 PowerShell（`.\gradlew.bat …`）；CI 在 Linux 上用 `bash ./gradlew`。
+- GitHub Actions 在 PR 与任何分支的 push 时运行 `check build`，并将生成的 JAR 上传为对应 commit SHA 命名的 workflow artifact。
 
 ## 常用命令
 

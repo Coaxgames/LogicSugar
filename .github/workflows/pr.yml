@@ -4,7 +4,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
   push:
-    branches: [main]
 
 permissions:
   contents: read
@@ -48,6 +47,9 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
+      - name: Add Android build tools to PATH
+        run: echo "${ANDROID_HOME}/build-tools/34.0.0" >> "$GITHUB_PATH"
+
       - name: Build Mindustry desktop dependency
         working-directory: Mindustry-master
         run: ./gradlew --no-daemon desktop:dist
@@ -57,4 +59,11 @@ jobs:
 
       - name: Compile and run LogicSugar checks
         working-directory: LogicSugar
-        run: bash ./gradlew --no-daemon check --stacktrace --console=plain
+        run: bash ./gradlew --no-daemon check build --stacktrace --console=plain
+
+      - name: Upload built LogicSugar jars
+        uses: actions/upload-artifact@v4
+        with:
+          name: LogicSugar-${{ github.sha }}
+          path: LogicSugar/build/libs/LogicSugar-v*.jar
+          if-no-files-found: error
