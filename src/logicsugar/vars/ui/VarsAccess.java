@@ -5,6 +5,7 @@ import arc.Events;
 import arc.util.Log;
 import logicsugar.vars.Snapshots;
 import logicsugar.vars.VarsOptions;
+import mindustry.Vars;
 import mindustry.game.EventType;
 import mindustry.gen.Building;
 
@@ -34,6 +35,9 @@ public final class VarsAccess{
         initialized = true;
 
         Events.on(EventType.TapEvent.class, e -> {
+            // TapEvent is also raised on the server for remote taps. Only the local player's
+            // event should open UI here; desktop and mobile input both provide that player.
+            if(e.player == null || e.player != Vars.player) return;
             if(tripleTapMillis <= 0) return;
             Building build = e.tile == null ? null : e.tile.build;
             // 上游 v0.11.6：本客户端不可访问的方块（世界处理器、禁止编辑的方块）连对话框都不开——
