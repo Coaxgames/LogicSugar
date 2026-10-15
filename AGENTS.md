@@ -26,12 +26,18 @@ this file only adds what is specific to this project.
 - 新功能提案先按此底线分类：不碰保存产物 → 正常实现；碰保存产物 → 必须加联机门禁，
   并在 bundle 与 `docs/architecture.md` 说明单机限定。
 - **上游同步基线**：断言/断点子系统与调试工具（Vars / Memory / Properties 界面、快照、Profiler）对齐
-  cardillan/MlogAssertions **v0.11.6**（参考源码 `../_upstream/MlogAssertions-0.11.6`，由
-  `gh api repos/cardillan/MlogAssertions/tarball/refs/tags/v0.11.6` 取得；旧快照
-  `../_upstream/MlogAssertions-0.11.3` 与 `../_upstream/MlogAssertions-pr`（v0.8.2）只当历史参考，
+  cardillan/MlogAssertions **v0.11.7**（参考源码 `../_upstream/MlogAssertions-0.11.7`，由
+  `gh api repos/cardillan/MlogAssertions/tarball/refs/tags/v0.11.7` 取得；旧快照
+  `../_upstream/MlogAssertions-0.11.6`、`../_upstream/MlogAssertions-0.11.3` 与
+  `../_upstream/MlogAssertions-pr`（v0.8.2）只当历史参考，
   不要 `git fetch upstream`）。v0.11.3 → v0.11.6 跟了这些：内存表导入的 65535 字节上限、
   三击不打开本客户端不可访问的方块、失败断言/`error` 的 `exec.stop` 停机语义（详见
   `docs/architecture.md`）、profiler 界面重做与 `noYielding`/`yields()` 快路径、五个视图开关的持久化。
+  **v0.11.6 → v0.11.7 只有一个提交「Fix possible crash」，三处守卫全部要跟**：
+  `Instrumentation.createSnapshot` 在 `Snapshots.create` 返回 `null`（快照上限被设成 0）时
+  既不登记也不入列、`InstrumentationEngine.getInstrumentation` 对 `!build.displayable()`
+  （本客户端不可访问的世界处理器）返回 `null`、`SnapshotI` 在 `master == null` 时不写 recording
+  （这条本仓库从 v0.11.3 移植起就已带着，`assertTest` 已钉住）。
   **明确不移植**：上游的指令上限覆盖（`max-instructions`，处理器保存产物 ≤1000 条是硬不变式）、
   v0.11.5 的「自动 profile 全部处理器」游戏规则（`data/CustomGameRules` + `Accessor` + `MapIndex`，
   需要反射挂 `CustomRulesDialog` 并把 `rules.tags` 写进地图状态）、上游 `ConfigEvent` 的

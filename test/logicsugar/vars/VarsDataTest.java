@@ -174,6 +174,19 @@ public final class VarsDataTest{
 
         other.clear();
         check(other.size == 0 && other.queue.size == 0, "clear 同时清队列与额度");
+
+        // 上限为 0（设置里关掉快照）时 create 必须在碰实体之前就返回 null：
+        // profiler 的 recording 子快照（Instrumentation.createSnapshot）就靠这一支拿到空值，
+        // 漏判就是上游 v0.11.7 那处「录制中途把上限设成 0 会崩」。传 null 实体正是要钉住
+        // 「先判上限、后碰实体」的顺序——顺序反了这里会先 NPE，而不是悄悄放过。
+        int limit = Snapshots.maxSnapshots;
+        try{
+            Snapshots.maxSnapshots = 0;
+            check(Snapshots.create(null, SnapshotType.recording, "limit 0", null) == null,
+                "快照上限为 0 时 create 必须返回 null（recording 子快照据此跳过登记）");
+        }finally{
+            Snapshots.maxSnapshots = limit;
+        }
     }
 
     /** recording 快照的默认变量过滤：{@code selectedVars} 为 null 时不过滤。 */

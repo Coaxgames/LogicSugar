@@ -28,6 +28,7 @@ public class SugarAssertsTest{
         snapshotCardRoundTrip();
         profileAndRestartCards();
         failuresSetTheStopFlag();
+        snapshotMasterIsCheckedBeforeRegistering();
         System.out.println("LogicSugar SugarAsserts self-test passed.");
     }
 
@@ -453,6 +454,26 @@ public class SugarAssertsTest{
         int elseAt = assertion.indexOf("}else{");
         check(elseAt >= 0 && elseAt < stopAt, "停机标志必须写在非断点分支里");
         check(!assertion.substring(0, elseAt).contains("exec.stop"), "断点路径不能置停机标志（那是暂停，不是停机）");
+    }
+
+    /**
+     * 上游 v0.11.7：{@code snapshot} 指令在快照被关掉（设置里的上限为 0）时拿不到主快照，必须在
+     * {@code recording().add(...)} 之前判空——这是「关掉快照后创建快照会崩」的另一半。
+     *
+     * <p>本 mod 从 v0.11.3 移植时就带着这个判空，这里把它钉住：删掉它，下述崩溃会静默回来。
+     * 主快照的自我引用（{@code master.recording().add(master)}）与逐指令子快照的启动是这一支
+     * 的两件必须一起做的事。</p>
+     */
+    private static void snapshotMasterIsCheckedBeforeRegistering(){
+        String source = readSource("src/logicsugar/assist/AssertInstructions.java");
+        String recording = logicsugar.SourceNails.blockFrom(source,
+            "if(master != null && type == SnapshotType.recording");
+
+        check(recording.contains("master != null"), "recording 分支必须先判主快照非空（上游 v0.11.7）");
+        check(recording.contains("master.recording().add(master)"),
+            "主快照要把自己放进 recording() 子列表（上游的自我引用写法）");
+        check(recording.contains("startInstructionSnapshots(build, steps.numi(), master)"),
+            "recording 分支必须启动逐指令子快照");
     }
 
     /** 读仓库源文件（SourceNails 的容错包装：读不到直接断言失败，不吞异常）。 */

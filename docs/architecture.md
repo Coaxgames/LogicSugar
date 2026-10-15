@@ -116,7 +116,7 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
 
 ## 断言子系统（调试构建）
 
-`mindustry.logic.SugarAsserts` + `logicsugar.assist.AssertInstructions` 移植自 cardillan/MlogAssertions（当前基线 **v0.11.6**，线格式兼容，致谢其作者 cardillan；Mindcode 产出的断言代码可被本编辑器识别）：九条自定义指令 `assert` / `assertBounds` / `assertequals` / `assertflush` / `assertprints` / `asserttype` / `error` / `log` / `breakpoint`。**断言失败是停机不是自旋**（上游 v0.11.4）：回退 `counter` + `yield` 之外还置 `exec.stop`，消息仍由 `ProcessorStatus` 绘制在处理器上方；只能说「停机状态 + 停在失败行上重跑」——原版 `LExecutor.runOnce` 不看 `stop`，所以普通处理器每帧仍重跑失败指令（消息因此持续刷新），而世界处理器的 `LogicScript` 循环真的收工。profiler 的包装器读 `exec.stop` 后停止统计与录制（见下面的 Profiler 一节），这对单机/联机行为一致，也不影响保存产物。失败文本按上游 v0.11 语义生成：消息留空（线上写 `~`）时用带比较值的本地化默认文本（`logicsugar.asserts.assertFailedWithValues` / `equalFailedWithValues` / `boundsFailedWithValues`），写了消息则原样显示；消息内 `{1}`… 引用比较值，`{变量名}` 取该变量当前值（`{@counter}` 渲染为失败行号），LogicSugar ≤5.5 的 `[[1]` 旧写法仍被识别（`AssertInstructions.formatMessage`）。`assert` 是通用的条件断言（`ConditionOp` + 值 + 比较值 + 可选消息），上游 v0.11.0 新增。`breakpoint` 语义与上游一致（视角居中到处理器、按设置临时分离视角、冻结全部 accumulator 并在本帧更新结束后归还，暂停期间消息持续绘制），但**联机（`Vars.net.active()`）下拒绝暂停**（上游 v0.10 起的门禁）：显式 `breakpoint` 直接跳过，断言失败退回「停机 + 处理器上方消息」的非断点路径（与上游「静默丢弃断言」不同，见 `AssertInstructions.assertion` 注释）。设置「断言失败即断点」（`logicsugar.assertsAreBreakpoints`）可让断言失败改为在失败指令处暂停；「禁用断点」（`logicsugar.disableBreakpoints`）让 breakpoint 与断点化断言直接跳过。
+`mindustry.logic.SugarAsserts` + `logicsugar.assist.AssertInstructions` 移植自 cardillan/MlogAssertions（当前基线 **v0.11.7**，线格式兼容，致谢其作者 cardillan；Mindcode 产出的断言代码可被本编辑器识别）：九条自定义指令 `assert` / `assertBounds` / `assertequals` / `assertflush` / `assertprints` / `asserttype` / `error` / `log` / `breakpoint`。**断言失败是停机不是自旋**（上游 v0.11.4）：回退 `counter` + `yield` 之外还置 `exec.stop`，消息仍由 `ProcessorStatus` 绘制在处理器上方；只能说「停机状态 + 停在失败行上重跑」——原版 `LExecutor.runOnce` 不看 `stop`，所以普通处理器每帧仍重跑失败指令（消息因此持续刷新），而世界处理器的 `LogicScript` 循环真的收工。profiler 的包装器读 `exec.stop` 后停止统计与录制（见下面的 Profiler 一节），这对单机/联机行为一致，也不影响保存产物。失败文本按上游 v0.11 语义生成：消息留空（线上写 `~`）时用带比较值的本地化默认文本（`logicsugar.asserts.assertFailedWithValues` / `equalFailedWithValues` / `boundsFailedWithValues`），写了消息则原样显示；消息内 `{1}`… 引用比较值，`{变量名}` 取该变量当前值（`{@counter}` 渲染为失败行号），LogicSugar ≤5.5 的 `[[1]` 旧写法仍被识别（`AssertInstructions.formatMessage`）。`assert` 是通用的条件断言（`ConditionOp` + 值 + 比较值 + 可选消息），上游 v0.11.0 新增。`breakpoint` 语义与上游一致（视角居中到处理器、按设置临时分离视角、冻结全部 accumulator 并在本帧更新结束后归还，暂停期间消息持续绘制），但**联机（`Vars.net.active()`）下拒绝暂停**（上游 v0.10 起的门禁）：显式 `breakpoint` 直接跳过，断言失败退回「停机 + 处理器上方消息」的非断点路径（与上游「静默丢弃断言」不同，见 `AssertInstructions.assertion` 注释）。设置「断言失败即断点」（`logicsugar.assertsAreBreakpoints`）可让断言失败改为在失败指令处暂停；「禁用断点」（`logicsugar.disableBreakpoints`）让 breakpoint 与断点化断言直接跳过。
 
 - **asserttype 线格式**：上游 v0.10 起顺序为 `<type> <value> <message>`（本 mod 同）；类型表与上游对齐（24 种，v0.11.3 起未变：基础类型 + 内容物细分 item / block / bulletType / liquid / statusEffect / unitType / weather / team / unitCommand / unitStance + building 细分 processor / memory / message / display / canvas + property / readable / writable / senseable），LogicSugar 额外支持 `none`（线上写 `null`）——上游 `AssertionDataType` 无法断言空值。旧的 `<value> <type>` 顺序仍可读取（`parseAssertType` 以「哪个 token 是类型名」判定；两个都是类型名时按新序），保存时统一写新序。类型分类是层级而非互斥：`senseable` 同时匹配单位/建筑/队伍，失败消息用 `AssertionDataType.actualType` 取最窄匹配（如 building 而不是 senseable）。
 - **assertprints 缓冲语义**：按上游 v0.11，在比较前就把缓冲区截断到记录位置——失败重试不再累积输出，也不把被检查区域的文本留给下一条 `assertprints`。
@@ -126,7 +126,7 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
 ### 残余风险与不跟随的上游改动
 
 - **不认识的外来 token 仍会中止整段解析**。原版 `LParser` 只把 `LogicIO.read(tokens, tok)` 包在 try/catch 里，自定义解析器抛出的异常（未知类型名等 `IllegalArgumentException`）会中止整个程序的解析，编辑器因此拒绝打开（`snapshot recording` 在本次改动之前就是这种情形）。本次只消除了这一个具体缺口：新增 `recording` 类型与 `steps` 槽、并让旧文本继续可读；**不引入「把解析异常吞成 InvalidStatement」的兜底**，否则用户手打错 token 的定位报错会退化成静默的 noop 卡片（`SugarAssertsTest.parseFailureIsACleanError` 钉住这条）。上游以后新增的枚举 token 仍会以同样方式暴露，`SugarDecompiler.openableSource` 只会把载体文本换成存储的程序。
-- **不跟随上游 v0.11.2–v0.11.6 的身份类改动**：设置键前缀（上游改 `mlogdevtools-*`）、mod 改名（Mlog Dev Tools）、Gradle Groovy → KTS、`README_zh` 均不跟。这些是打包/更新身份，改了等于让既有用户的设置与更新检查失效；需要同步的是线格式与指令语义。例如上游 v0.11.6 的视图偏好持久化就跟了语义，但键名自己定（`logicsugar.vars*`）。三个明确不移植的项：
+- **不跟随上游 v0.11.2–v0.11.7 的身份类改动**：设置键前缀（上游改 `mlogdevtools-*`）、mod 改名（Mlog Dev Tools）、Gradle Groovy → KTS、`README_zh` 均不跟。这些是打包/更新身份，改了等于让既有用户的设置与更新检查失效；需要同步的是线格式与指令语义。例如上游 v0.11.6 的视图偏好持久化就跟了语义，但键名自己定（`logicsugar.vars*`）。三个明确不移植的项：
   - 上游的 `max-instructions`（指令预算覆盖）：处理器保存产物 ≤1000 条是本项目的硬不变式。
   - 上游 v0.11.5 的「自动 profile 全部处理器」游戏规则（`data/CustomGameRules` + `Accessor` + `MapIndex`）：需要反射挂 4 个 `CustomRulesDialog`（MindustryX 路径不同）并把 `rules.tags` 写进地图状态，收益小、兼容风险大；要就该单独立项。
   - 上游 `ConfigEvent` 里「`instructions != instrumentation.instructions` 才重建」的精细判断：那是为自动 profile 服务的微优化，本 mod 保持「配置变更就丢弃重建」的简单口径。
@@ -138,7 +138,7 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
 
 ## 变量/内存/属性界面与快照（调试工具）
 
-移植自上游 MlogAssertions v0.11.6（v0.11.3 的子系统，后续跟进到 v0.11.6）的
+移植自上游 MlogAssertions v0.11.7（v0.11.3 的子系统，后续跟进到 v0.11.7）的
 「Vars / Memory / Properties」三合一对话框与快照子系统。三者共用
 同一个 `VarsDialog`，标题由数据源决定（`BlockDataType`：`变量`/`内存`/`属性`）；快照也是同一种数据源，
 因此浏览快照与浏览活数据用的是同一套渲染。
@@ -172,6 +172,8 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
      本客户端不可访问的方块（世界处理器、禁止编辑的地图上的处理器）**连对话框都不开**：
      `Building.displayable()`（= `LogicBuild.accessible()`）为假时直接返回，既不攒计数也不弹窗
      （上游 v0.11.6；这类方块读不到实体，弹窗会崩）。`displayable()` 是原版 public API，跨类加载器安全。
+     同一把钥匙在 v0.11.7 也补到了 profiler 的收口点（`InstrumentationEngine.getInstrumentation`），
+     所以「不可访问」的范围与判定在两处一致。
   3. 内存块/处理器的配置面板（`BlockConfigAccess`，反射替换 `InputHandler.config`）。
 - **MindustryX 共存（原则要求）**：探测到 fork 自带 `mindustryX.features.ui.LogicSupport` 时，内存块/处理器的
   配置面板**先调用方块自己的 `buildConfiguration` 再追加**本 mod 的按钮（否则会把 MindustryX 的内存网格/
@@ -202,8 +204,8 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
 
 ## Profiler（性能分析器）
 
-`logicsugar.profile` + `logicsugar.profile.ui`，移植自上游 MlogAssertions v0.11.6（v0.11.3 基线，之后跟进
-v0.11.4 的界面/停机与 v0.11.6 的性能口径）——统计每条指令的执行次数/消耗的指令预算、分支比例与覆盖率，
+`logicsugar.profile` + `logicsugar.profile.ui`，移植自上游 MlogAssertions v0.11.7（v0.11.3 基线，之后跟进
+v0.11.4 的界面/停机、v0.11.6 的性能口径与 v0.11.7 的两个崩溃守卫）——统计每条指令的执行次数/消耗的指令预算、分支比例与覆盖率，
 界面入口在变量界面的 📊 按钮与 `Edit` 菜单（快照关闭时标题栏不存在，两处都要留），设置项
 `logicsugar.startProfilerImmediately` 控制空数据页是否直接开始统计。
 
@@ -227,6 +229,13 @@ v0.11.4 的界面/停机与 v0.11.6 的性能口径）——统计每条指令�
 - **停机检测（上游 v0.11.4）**：两个包装器的 `run()` 在快照分支之后检查 `exec.stop` → `stopAll()`
   （停统计 + 放弃未完成的 recording）；`InstrumentedWait` 不加（原版 `WaitI` 不会置 stop，上游同）。
   配合上面的「失败断言/`error` 置 `exec.stop`」，断言失败后界面顶部的启停按钮会自行变暗、数字不再增长。
+- **两个崩溃守卫（上游 v0.11.7）**：`getInstrumentation` 对 `!build.displayable()`
+  （= `LogicBuild.accessible()`：世界处理器、禁止编辑的地图）直接返回 `null`，与变量界面三击入口
+  用的是同一把钥匙——这类处理器本客户端读不到实体，不该进统计（调用方本来就判空，表现为「没有统计」）；
+  `Instrumentation.createSnapshot` 在 `Snapshots.create` 返回 `null`（快照上限为 0——用户在录制中途
+  把上限设成 0 就是这条路）时既不 `recording().add` 也不 `Snapshots.register`。两句都在处理器线程上，
+  漏判就是 NPE。`profilerTest` 用源码钉子锁住两条（两处都需要活的 `LogicBlock`，无法无头真跑）；
+  `Snapshots.create` 的「先判上限、后碰实体」由 `varsTest` 用 null 实体直接钉住。
 - **计数器集中在 `Counters`（本 mod 的有意差异）**：上游把 `coverage`/`maxSteps`/`totalSteps`/`maxTime`/
   `totalTime`/`lostQuota` 与 `steps`/`time`/`covered` 一起摊在 `Instrumentation` 字段上，而
   `Instrumentation` 需要一块活的 `LogicBlock` 才能构造（无头造不出来）。这里把「只有计步会动」的那部分

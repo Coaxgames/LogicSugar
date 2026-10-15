@@ -42,6 +42,7 @@ public final class ProfileInstrumentationTest{
         noYieldingRegistration();
         stepPathAccounting();
         stopStopsProfiling();
+        upstreamV0117Guards();
         rowOrder();
 
         System.out.println("LogicSugar profiler self-test passed.");
@@ -338,6 +339,44 @@ public final class ProfileInstrumentationTest{
         String wait = logicsugar.SourceNails.blockFrom(source,
             "public void run(LExecutor exec){\n            int index = (int)(exec.counter.numval - 1);\n            instruction.run(exec);\n            recordStepWithYielding(exec, index);\n\n            // 原版 WaitI");
         check(!wait.contains("exec.stop"), "InstrumentedWait 不加停机检测（上游同：WaitI 不会置 stop）");
+    }
+
+    // ===== 上游 v0.11.7 的两个守卫 =====
+
+    /**
+     * 上游 v0.11.7 的「Fix possible crash」有两条命中本 profiler，都要用源码钉子锁住：
+     *
+     * <ul>
+     *   <li>recording 子快照在快照被关掉（{@code maxSnapshots == 0}）时拿到的是 {@code null}，
+     *       旧写法直接解引用（{@code recording().add} / {@code Snapshots.register}），
+     *       录制中途把上限设成 0 就会在处理器线程上抛 NPE。</li>
+     *   <li>「本客户端不可访问的处理器」（{@code displayable()} == {@code LogicBuild.accessible()}：
+     *       世界处理器、禁止编辑的地图）不该进统计——变量界面三击入口早就用这把钥匙，
+     *       统计器的收口点当时漏了。</li>
+     * </ul>
+     *
+     * <p>{@code Instrumentation} 与 {@code getInstrumentation} 都需要一块活的 {@code LogicBlock}
+     * （无头造不出来），所以同 {@link #stopStopsProfiling()} 一样只钉代码形状。</p>
+     */
+    private static void upstreamV0117Guards(){
+        String source = source("src/logicsugar/profile/Instrumentation.java");
+        String createSnapshot = logicsugar.SourceNails.methodBody(source,
+            "private void createSnapshot(int index, LVar[] vars){");
+
+        check(createSnapshot.contains("Snapshot snapshot = Snapshots.create("),
+            "createSnapshot 必须先把 create 的返回值收下来再登记");
+        int guard = createSnapshot.indexOf("if(snapshot != null){");
+        check(guard >= 0,
+            "createSnapshot 必须判空（上游 v0.11.7）：上限为 0 时 Snapshots.create 返回 null");
+        check(guard < createSnapshot.indexOf("master.recording().add(snapshot)")
+                && guard < createSnapshot.indexOf("Snapshots.register(snapshot)"),
+            "入列与登记都要写在判空之内（否则 maxSnapshots == 0 时仍是 NPE）");
+
+        String engine = source("src/logicsugar/profile/InstrumentationEngine.java");
+        String get = logicsugar.SourceNails.methodBody(engine,
+            "public static Instrumentation getInstrumentation(LogicBuild build, boolean instrument, Cons<Instrumentation> action){");
+        check(get.contains("!build.displayable()"),
+            "getInstrumentation 必须跳过本客户端不可访问的处理器（上游 v0.11.7）");
     }
 
     // ===== 排序助手（上游 v0.11.6 的 ProfileDialog.sort） =====
