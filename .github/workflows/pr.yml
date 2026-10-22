@@ -269,5 +269,5 @@ jobs:
             gh release create "$RELEASE_TAG" LogicSugar.jar \
               --title "LogicSugar ${RELEASE_TAG#v}" \
               --generate-notes \
-              --target HEAD
+              --target main
           fi
