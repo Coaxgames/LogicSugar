@@ -20,6 +20,7 @@ public final class CanvasSourceTest{
         try{
             saveIsAPureTextRead();
             addressLabelsDoNotOscillate();
+            jumpCurveHidingToleratesMissingButtonElement();
         }catch(java.io.IOException exception){
             check(false, "canvas sources could not be read: " + exception.getMessage());
         }
@@ -81,6 +82,21 @@ public final class CanvasSourceTest{
                 + "every frame)");
         check(body.contains("if(!changed) return;"),
             "the idle path must not force a layout pass at all (it runs every frame for every card)");
+    }
+
+    private static void jumpCurveHidingToleratesMissingButtonElement() throws java.io.IOException{
+        System.out.println("== 跳转线隐藏兼容缺失的 JumpButton.elem ==");
+        String canvas = SourceNails.readSource("src/mindustry/logic/SugarCanvas.java");
+        String body = withoutComments(SourceNails.methodBody(canvas, "private void hideFoldedJumpCurves(){"));
+        check(body.contains("jumpButtonElement(button)"),
+            "jump-curve hiding must not link directly to JumpButton.elem, which is absent in some client forks");
+        check(!body.contains("button.elem"),
+            "JumpButton.elem must only be accessed through optional reflection");
+        check(canvas.contains("optionalField(LCanvas.JumpButton.class, \"elem\")"),
+            "the optional JumpButton.elem lookup must let the editor render when a client omits the field");
+        String helper = withoutComments(SourceNails.methodBody(canvas, "private static StatementElem jumpButtonElement("));
+        check(helper.contains("if(jumpButtonElemField == null) return null;"),
+            "missing JumpButton.elem must disable only folded-curve hiding, not canvas drawing");
     }
 
     /** 一段源码去掉注释（整行与行尾），只留可执行文本：源码钉子应该钉代码，不该被注释里的

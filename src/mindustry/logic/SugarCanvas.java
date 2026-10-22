@@ -64,6 +64,7 @@ public class SugarCanvas extends LCanvas{
     private static final Field layoutJumpsField = optionalField(LCanvas.DragLayout.class, "jumps");
     private static final Field canvasJumpsField = optionalField(LCanvas.class, "jumps");
     private static final Field updateJumpHeightsField = optionalField(LCanvas.DragLayout.class, "updateJumpHeights");
+    private static final Field jumpButtonElemField = optionalField(LCanvas.JumpButton.class, "elem");
     private static final Method recalculateMethod = optionalMethod(LCanvas.class, "recalculate");
     private static final Method compactMethod = optionalMethod(LCanvas.class, "isCompact");
     private static final Method legacyRowsMethod = optionalMethod(LCanvas.class, "useRows");
@@ -199,7 +200,7 @@ public class SugarCanvas extends LCanvas{
             if(!(child instanceof LCanvas.JumpCurve curve)) continue;
             LCanvas.JumpButton button = curve.button;
             if(button == null) continue;
-            LCanvas.StatementElem src = button.elem;
+            LCanvas.StatementElem src = jumpButtonElement(button);
             if(src == null) continue;
             // 目标：JumpStatement.dest 是 public，可跨 classloader 访问；Begin 结构走
             // StructureJumpCurve（target!=null 时不画），无需处理。
@@ -213,6 +214,15 @@ public class SugarCanvas extends LCanvas{
                 // 把 width/height 压为 0，JumpCurve.draw() 的 if(height == 0) return 生效。
                 curve.setSize(0, 0);
             }
+        }
+    }
+
+    private static StatementElem jumpButtonElement(LCanvas.JumpButton button){
+        if(jumpButtonElemField == null) return null;
+        try{
+            return (StatementElem)jumpButtonElemField.get(button);
+        }catch(IllegalAccessException | ClassCastException exception){
+            return null;
         }
     }
 
