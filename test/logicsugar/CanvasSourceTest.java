@@ -21,6 +21,7 @@ public final class CanvasSourceTest{
             saveIsAPureTextRead();
             addressLabelsDoNotOscillate();
             jumpCurveHidingToleratesMissingButtonElement();
+            jumpLineColorUsesForkCompatibleSourceLookup();
         }catch(java.io.IOException exception){
             check(false, "canvas sources could not be read: " + exception.getMessage());
         }
@@ -94,9 +95,40 @@ public final class CanvasSourceTest{
             "JumpButton.elem must only be accessed through optional reflection");
         check(canvas.contains("optionalField(LCanvas.JumpButton.class, \"elem\")"),
             "the optional JumpButton.elem lookup must let the editor render when a client omits the field");
-        String helper = withoutComments(SourceNails.methodBody(canvas, "private static StatementElem jumpButtonElement("));
-        check(helper.contains("if(jumpButtonElemField == null) return null;"),
-            "missing JumpButton.elem must disable only folded-curve hiding, not canvas drawing");
+        String helper = withoutComments(SourceNails.methodBody(canvas, "public static StatementElem jumpButtonElement("));
+        check(helper.contains("if(fooClient)"),
+            "Foo's client marker must select its JumpButton source-element API");
+        check(canvas.contains("optionalField(Version.class, \"clientVersion\") != null"),
+            "Foo's client-specific Version.clientVersion field must be detected without linking to it");
+        check(helper.contains("jumpButtonElementFromHierarchy(button)"),
+            "the Foo path must use the source hierarchy used by Foo's own JumpCurve implementation");
+        check(helper.contains("jumpButtonElemField.get(button)"),
+            "the vanilla path must retain optional access to JumpButton.elem");
+        check(helper.contains("return jumpButtonElementFromHierarchy(button);"),
+            "forks without JumpButton.elem must safely fall back to the public scene hierarchy");
+        String factory = withoutComments(SourceNails.methodBody(canvas, "public static LCanvas.JumpButton createJumpButton("));
+        check(factory.contains("fooClient ? jumpButtonConstructor : jumpButtonWithElemConstructor"),
+            "Foo's two-argument constructor must be preferred only when the Foo client marker is present");
+        check(factory.contains("constructor.getParameterCount() == 3"),
+            "the jump-button factory must pass the statement element only to vanilla's three-argument constructor");
+    }
+
+    private static void jumpLineColorUsesForkCompatibleSourceLookup() throws java.io.IOException{
+        System.out.println("== 跳转线着色使用兼容的来源积木查找 ==");
+        String source = SourceNails.readSource("src/logicsugar/assist/JumpLineColor.java");
+        String body = withoutComments(SourceNails.methodBody(source, "public static void patchCurve("));
+        check(body.contains("SugarCanvas.jumpButtonElement(button)"),
+            "jump coloring must share the Foo-aware source lookup");
+        check(!body.contains("button.elem"),
+            "jump coloring must not link directly to the fork-removed JumpButton.elem field");
+        String statements = SourceNails.readSource("src/mindustry/logic/SugarStatements.java");
+        check(!statements.contains("super(getter, setter, elem)"),
+            "structured jump buttons must not link to a constructor absent from Foo's LCanvas");
+        check(statements.contains("SugarCanvas.createJumpButton(getter"),
+            "structured jump buttons must use the runtime-compatible constructor factory");
+        String prepareHeight = withoutComments(SourceNails.methodBody(statements, "public void prepareHeight(){"));
+        check(!prepareHeight.contains("super.prepareHeight()") && !prepareHeight.contains("markedDone ="),
+            "jump-height support must not link to fields or methods omitted by Foo's JumpCurve");
     }
 
     /** 一段源码去掉注释（整行与行尾），只留可执行文本：源码钉子应该钉代码，不该被注释里的

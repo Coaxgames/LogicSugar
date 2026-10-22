@@ -381,7 +381,6 @@ public final class ExprTextImport{
 
         if(applied > 0){
             // 语句条数不变，但积木高度与跳转线要重算（ExprHook 折叠后做的是同一件事）。
-            canvas.statements.updateJumpHeights = true;
             SugarCanvas.markJumpHeightsDirty(canvas);
         }
         return applied;

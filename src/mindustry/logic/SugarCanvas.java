@@ -20,6 +20,7 @@ import arc.struct.Seq;
 import arc.struct.SnapshotSeq;
 import arc.util.Tmp;
 import mindustry.Vars;
+import mindustry.core.Version;
 import mindustry.gen.Icon;
 import mindustry.gen.Tex;
 import mindustry.ui.Styles;
@@ -42,6 +43,7 @@ import logicsugar.assist.expr.ExprStatement;
 import logicsugar.assist.expr.ExprTextImport;
 
 import java.util.IdentityHashMap;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayDeque;
@@ -65,6 +67,11 @@ public class SugarCanvas extends LCanvas{
     private static final Field canvasJumpsField = optionalField(LCanvas.class, "jumps");
     private static final Field updateJumpHeightsField = optionalField(LCanvas.DragLayout.class, "updateJumpHeights");
     private static final Field jumpButtonElemField = optionalField(LCanvas.JumpButton.class, "elem");
+    private static final boolean fooClient = optionalField(Version.class, "clientVersion") != null;
+    private static final Constructor<?> jumpButtonWithElemConstructor = optionalConstructor(
+        LCanvas.JumpButton.class, arc.func.Prov.class, arc.func.Cons.class, LCanvas.StatementElem.class);
+    private static final Constructor<?> jumpButtonConstructor = optionalConstructor(
+        LCanvas.JumpButton.class, arc.func.Prov.class, arc.func.Cons.class);
     private static final Method recalculateMethod = optionalMethod(LCanvas.class, "recalculate");
     private static final Method compactMethod = optionalMethod(LCanvas.class, "isCompact");
     private static final Method legacyRowsMethod = optionalMethod(LCanvas.class, "useRows");
@@ -217,13 +224,48 @@ public class SugarCanvas extends LCanvas{
         }
     }
 
-    private static StatementElem jumpButtonElement(LCanvas.JumpButton button){
-        if(jumpButtonElemField == null) return null;
-        try{
-            return (StatementElem)jumpButtonElemField.get(button);
-        }catch(IllegalAccessException | ClassCastException exception){
-            return null;
+    public static StatementElem jumpButtonElement(LCanvas.JumpButton button){
+        if(button == null) return null;
+        if(fooClient){
+            StatementElem elem = jumpButtonElementFromHierarchy(button);
+            if(elem != null) return elem;
         }
+        if(jumpButtonElemField != null){
+            try{
+                return (StatementElem)jumpButtonElemField.get(button);
+            }catch(IllegalAccessException | ClassCastException exception){
+                return jumpButtonElementFromHierarchy(button);
+            }
+        }
+        return jumpButtonElementFromHierarchy(button);
+    }
+
+    public static boolean isFooClient(){
+        return fooClient;
+    }
+
+    public static LCanvas.JumpButton createJumpButton(arc.func.Prov<StatementElem> getter,
+                                                       arc.func.Cons<StatementElem> setter,
+                                                       StatementElem elem){
+        Constructor<?> constructor = fooClient ? jumpButtonConstructor : jumpButtonWithElemConstructor;
+        if(constructor == null){
+            constructor = fooClient ? jumpButtonWithElemConstructor : jumpButtonConstructor;
+        }
+        if(constructor == null) throw new IllegalStateException("No supported LCanvas.JumpButton constructor found");
+        try{
+            Object button = constructor.getParameterCount() == 3
+                ? constructor.newInstance(getter, setter, elem)
+                : constructor.newInstance(getter, setter);
+            return (LCanvas.JumpButton)button;
+        }catch(ReflectiveOperationException | ClassCastException exception){
+            throw new IllegalStateException("Unable to create a compatible LCanvas.JumpButton", exception);
+        }
+    }
+
+    private static StatementElem jumpButtonElementFromHierarchy(LCanvas.JumpButton button){
+        Group parent = button.parent;
+        if(parent != null && parent.parent instanceof StatementElem elem) return elem;
+        return null;
     }
 
     private void updateMlogAddresses(){
@@ -404,6 +446,16 @@ public class SugarCanvas extends LCanvas{
     private static Field optionalField(Class<?> type, String name){
         try{
             Field result = type.getDeclaredField(name);
+            result.setAccessible(true);
+            return result;
+        }catch(ReflectiveOperationException exception){
+            return null;
+        }
+    }
+
+    private static Constructor<?> optionalConstructor(Class<?> type, Class<?>... parameterTypes){
+        try{
+            Constructor<?> result = type.getDeclaredConstructor(parameterTypes);
             result.setAccessible(true);
             return result;
         }catch(ReflectiveOperationException exception){

@@ -178,6 +178,12 @@ LogicSugar 是独立模组，同时也是 Neon 聚合模组的子模组之一（
 - **MindustryX 共存（原则要求）**：探测到 fork 自带 `mindustryX.features.ui.LogicSupport` 时，内存块/处理器的
   配置面板**先调用方块自己的 `buildConfiguration` 再追加**本 mod 的按钮（否则会把 MindustryX 的内存网格/
   处理器工具条整块顶掉）；原版则按上游做法自建按钮（原版处理器的面板只有一个编辑铅笔，重复调用会出现两个）。
+- **Foo's Client 跳转线兼容**：Foo 的 `LCanvas.JumpButton` 没有原版的 `elem` 字段；它自己的
+  `JumpCurve` 从 `button.parent.parent` 找来源 `StatementElem`。检测到 `mindustry.core.Version.clientVersion`
+  时，跳转线着色与折叠线隐藏都使用该层级路径；原版优先使用可选的 `elem` 字段，字段缺失时也安全退回层级路径。
+  Foo 的按钮构造器是二参数，原版是带 `StatementElem` 的三参数；结构块通过反射选择对应构造器。Foo 没有原版
+  `JumpCurve.prepareHeight` 与动态高度字段，相关的结构曲线状态也按可选 API 处理。两条渲染路径共用
+  `SugarCanvas.jumpButtonElement`，避免某一处留下直接字段链接而在每帧崩溃。
 - **老内核兼容**：v160 才有的对象内存（`objectMemory`/`numberMemory`/`sentinel`）探测不到时，
   `MemoryVars` 退回老 fork 的单个 `double[] memory`（全部槽位视为数值槽），两个模型都探测不到则视图退化为 0 行。
 - **视图偏好持久化（上游 v0.11.6）**：`hex` / `sorted`（hide temps）/ `hideLinks` / `fullPrecision` 五个

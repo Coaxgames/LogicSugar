@@ -140,7 +140,7 @@ public class JumpLineColor{
 
                 LCanvas.JumpButton button = curve.button;
                 if(button == null) return;
-                LCanvas.StatementElem elem = button.elem;
+                LCanvas.StatementElem elem = SugarCanvas.jumpButtonElement(button);
                 if(elem == null) return;
                 LStatement st = elem.st;
                 if(st == null) return;

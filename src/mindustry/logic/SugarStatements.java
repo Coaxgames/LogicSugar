@@ -20,6 +20,10 @@ import mindustry.ui.Styles;
 import logicsugar.assist.SugarTooltip;
 import logicsugar.assist.expr.ExpressionEditor;
 
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -295,10 +299,18 @@ public final class SugarStatements{
         public boolean collapsed;
 
         protected void linkControl(Table table){
-            table.add(new TypedJumpButton(this, () -> dest, target -> {
+            arc.func.Prov<StatementElem> getter = () -> dest;
+            JumpButton button = SugarCanvas.createJumpButton(getter, target -> {
                 dest = SugarCanvas.canLink(this, target) ? target : null;
                 SugarCanvas.refreshCurrent();
-            }, elem)).size(30f).padRight(4f);
+            }, elem);
+            button.curve = new StructureJumpCurve(button, getter);
+            button.update(() -> {
+                Color color = SugarCanvas.isValidLink(this, getter.get()) ? Color.white : Pal.remove;
+                button.setColor(color);
+                button.getStyle().imageUpColor = color;
+            });
+            table.add(button).size(30f).padRight(4f);
         }
 
         protected void foldControl(Table table){
@@ -343,23 +355,14 @@ public final class SugarStatements{
         }
     }
 
-    private static class TypedJumpButton extends JumpButton{
-        private final BeginStatement begin;
-
-        TypedJumpButton(BeginStatement begin, arc.func.Prov<StatementElem> getter, arc.func.Cons<StatementElem> setter, StatementElem elem){
-            super(getter, setter, elem);
-            this.begin = begin;
-            curve = new StructureJumpCurve(this, getter);
-            update(() -> {
-                Color color = SugarCanvas.isValidLink(begin, getter.get()) ? Color.white : Pal.remove;
-                setColor(color);
-                getStyle().imageUpColor = color;
-            });
-        }
-    }
-
     private static class StructureJumpCurve extends JumpCurve{
         private final arc.func.Prov<StatementElem> target;
+        private static final MethodHandle prepareHeightMethod = optionalPrepareHeightMethod();
+        private static final Field markedDoneField = optionalJumpCurveField("markedDone");
+        private static final Field predHeightField = optionalJumpCurveField("predHeight");
+        private static final Field flippedField = optionalJumpCurveField("flipped");
+        private static final Field jumpUIBeginField = optionalJumpCurveField("jumpUIBegin");
+        private static final Field jumpUIEndField = optionalJumpCurveField("jumpUIEnd");
 
         StructureJumpCurve(JumpButton button, arc.func.Prov<StatementElem> target){
             super(button);
@@ -371,15 +374,64 @@ public final class SugarStatements{
             if(target.get() == null) super.draw();
         }
 
-        @Override
         public void prepareHeight(){
+            if(SugarCanvas.isFooClient()) return;
             if(target.get() == null){
-                super.prepareHeight();
+                invokePrepareHeight();
             }else{
-                markedDone = true;
-                predHeight = 0;
-                flipped = false;
-                jumpUIBegin = jumpUIEnd = Integer.MAX_VALUE;
+                set(markedDoneField, this, true);
+                set(predHeightField, this, 0);
+                set(flippedField, this, false);
+                set(jumpUIBeginField, this, Integer.MAX_VALUE);
+                set(jumpUIEndField, this, Integer.MAX_VALUE);
+            }
+        }
+
+        private void invokePrepareHeight(){
+            if(prepareHeightMethod == null) return;
+            try{
+                prepareHeightMethod.bindTo(this).invokeExact();
+            }catch(Throwable exception){
+                if(exception instanceof RuntimeException runtime) throw runtime;
+                if(exception instanceof Error error) throw error;
+                throw new IllegalStateException("Unable to prepare the vanilla jump curve", exception);
+            }
+        }
+
+        private static void set(Field field, Object target, boolean value){
+            if(field == null) return;
+            try{
+                field.setBoolean(target, value);
+            }catch(IllegalAccessException exception){
+                throw new IllegalStateException("Unable to update the jump curve layout", exception);
+            }
+        }
+
+        private static void set(Field field, Object target, int value){
+            if(field == null) return;
+            try{
+                field.setInt(target, value);
+            }catch(IllegalAccessException exception){
+                throw new IllegalStateException("Unable to update the jump curve layout", exception);
+            }
+        }
+
+        private static Field optionalJumpCurveField(String name){
+            try{
+                Field field = JumpCurve.class.getDeclaredField(name);
+                field.setAccessible(true);
+                return field;
+            }catch(ReflectiveOperationException exception){
+                return null;
+            }
+        }
+
+        private static MethodHandle optionalPrepareHeightMethod(){
+            try{
+                return MethodHandles.lookup().findSpecial(
+                    JumpCurve.class, "prepareHeight", MethodType.methodType(void.class), StructureJumpCurve.class);
+            }catch(NoSuchMethodException | IllegalAccessException exception){
+                return null;
             }
         }
     }
