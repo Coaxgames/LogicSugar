@@ -1,13 +1,14 @@
 # 版本与发布
 
-LogicSugar 的版本号体系、本地构建产物链与发布资产规则。原则：**版本号与构建都在本地完成**；仓库内的 CI（`.github/workflows/pr.yml`）只做 `check` 门禁，不承担发布。
+LogicSugar 的版本号体系、本地构建产物链与发布资产规则。main 的自动发布由 `.github/workflows/pr.yml` 负责；本地构建仍用于开发测试与手动发布。
 
 ## 版本号体系
 
 - 版本号写在 `build.gradle` 的 `version = "…"`（当前链上的值以该文件为准），产物文件名由它派生：`LogicSugar-v<version>.jar` 等。
 - `mod.json` 是运行时身份：发布态为 `name: "LogicSugar"`、`version` 与 build.gradle 一致。
+- main 上每次通过 CI 的代码 push 都会由 Actions 将补丁号加一，并同步写回这两个版本字段；版本提交后自动创建对应的 `v<version>` GitHub Release。
 - **本地开发态**（工作区默认约定，见上级 `codex/AGENTS.md` 的 Mod Task Default Mode）：`mod.json` 临时改为 `name: "LogicSugar-dev"`、`version: "0.0.0"`，只出 `构建/LogicSugar/LogicSugar-dev.jar` 本地测试产物，不做发布打包。切回发布身份时两处要同步改回。
-- 历史版本沿 `v<主>.<次>.<补丁>` 线演进；每个已发布版本在 GitHub Release 上有一份双语（中文 + English）正文，Release 正文即历史事实来源。仓库不保留 `release_notes_*.md` 副本：发布当次可临时生成，发布后删除（`release_notes_v2.3.1-dev.md` 一类的本地开发说明从未对应 Release）。
+- 历史版本沿 `v<主>.<次>.<补丁>` 线演进；自动发布以 GitHub Release 自动生成的提交说明为准，手动发布正文以 GitHub Release 为准。仓库不保留 `release_notes_*.md` 副本：发布当次可临时生成，发布后删除（`release_notes_v2.3.1-dev.md` 一类的本地开发说明从未对应 Release）。
 - 要求 **Mindustry v160.1+**（`mod.json` 的 `minGameVersion: "160.1"`）。v160 已去掉 `LCanvas.useRows()` 并把越界 `read` 改为 null，本仓库已按 v160 API 做兼容。
 
 ## 构建产物链
@@ -34,18 +35,24 @@ classes ──► d8InputJar ──► dexAndroid ──► jarAndroid ──►
 
 `dexAndroid` 要点：`--min-api 21 --release`，`--lib` 指向选中的 `android.jar`；同时把 compile/runtime classpath（含游戏 Mindustry.jar）以 `--classpath` 传给 d8，供接口/默认方法 desugar 解析——缺了游戏类路径，desugar 阶段无法解析游戏接口。D8 探测顺序 `D8_PATH` → `ANDROID_SDK_ROOT` / `ANDROID_HOME`，`android.jar` 从 SDK `platforms/` 下取最新一个。
 
-## 发布前本地必做步骤
+## 自动发布与手动发布检查
 
-1. 确认版本号：`build.gradle` 与 `mod.json` 同步为发布身份（`LogicSugar` / `<version>`）。
-2. 全量自测绿：`./gradlew check`（四十九个任务全过，见 [testing.md](testing.md)）。
+`.github/workflows/pr.yml` 在 PR 和 push 上先跑 `check build`。检查成功后会把该次构建上传为 Actions artifact `LogicSugar.jar`；PR 和非 main 分支只生成此 artifact，不发布。
+
+main push 成功后，release job 同步递增 `build.gradle` 与 `mod.json` 的 patch 版本、重新构建并检查含 `classes.dex` 的合并 jar，再先上传带版本的 release-candidate artifact，随后提交版本变更并创建 `v<version>` GitHub Release。Release 资产名固定为 `LogicSugar.jar`，正文由 GitHub 自动生成。若发布步骤失败，前面的 CI artifact 和（若已构建）release-candidate artifact 都保留。若版本提交已推送但创建 Release 失败，可在 Actions 页面对 main 手动运行该 workflow；它会复用待发布版本并重试。
+
+main 分支保护仍负责要求非管理员的代码变更经 PR 审核。由于发布 job 需要把版本提交推回 main，仓库设置必须允许 `github-actions[bot]` 绕过 main 的分支保护；不要因此允许普通贡献者绕过审核。若没有配置该绕过，版本推送会失败，release job 停止，检查 artifact 仍可下载。
+
+手动发布或核对产物时：
+
+1. 确认 `build.gradle` 与 `mod.json` 的 `LogicSugar` / 版本字段同步。
+2. 全量自测绿：`./gradlew check`（见 [testing.md](testing.md)）。
 3. 本地完整构建：`./gradlew.bat clean deploy`（需要 Android SDK 的 D8 + `android.jar`）。
-4. 撰写发布正文（初稿可存为 `release_notes_v<version>.md`）：中英对照、只写当前版本，格式见下节「发布正文风格」；发布后删除该文件，正文以 GitHub Release 为准。
-5. 核实产物：`build/libs/LogicSugar-v<version>.jar` 存在且含 `classes.dex`；`-desktop.jar` / `-android.jar` / d8-input jar 不进入发布流程。
-6. 正文自检：按「发布正文风格」逐条核对——条目是整条粗体的一行话、不写括号补充与枚举清单、不写「已知问题 / 兼容性」段落。跨版本的线格式与调试产物事实写在 [architecture.md](architecture.md) / [glossary.md](glossary.md)，不逐版复述进 Release。
+4. 核实 `build/libs/LogicSugar-v<version>.jar` 存在且含 `classes.dex`；`-desktop.jar` / `-android.jar` / d8-input jar 不进入 Release。
 
 ## 发布正文风格（Release body）
 
-发布正文就是 GitHub Release 的正文原文（Neon 聚合侧对应 `RELEASE_NOTES.md`），**只写当前版本**、中英对照；仓库只在发布当次临时保留草稿文件。范式经三次收敛，当前定稿为 v5.9.0（2026-10-11，用户定稿）：正文只有「本次新增 / 本次修复」两个小节，每条是**整条粗体的一行话**，不写括号补充、枚举清单与「已知问题」段落；开发期反馈与未发布功能的内部问题不写进 Release。
+自动发布使用 GitHub 的自动生成说明，范围只包含该 tag 与上一 tag 之间的提交。手动发布（包括 Neon 聚合侧对应的 `RELEASE_NOTES.md`）仍使用下方的双语正文范式：**只写当前版本**；仓库只在发布当次临时保留草稿文件。范式经三次收敛，当前定稿为 v5.9.0（2026-10-11，用户定稿）：正文只有「本次新增 / 本次修复」两个小节，每条是**整条粗体的一行话**，不写括号补充、枚举清单与「已知问题」段落；开发期反馈与未发布功能的内部问题不写进 Release。
 
 ````markdown
 > [!NOTE]
@@ -90,7 +97,7 @@ classes ──► d8InputJar ──► dexAndroid ──► jarAndroid ──►
 
 Mindustry 游戏内安装器取 Release API 返回的**第一个 `.jar`**，且不按操作系统挑资产。因此：
 
-- 一个 Release 必须有且只有一个 `.jar` 资产，即 `deploy` 的合并 jar（`LogicSugar-v<version>.jar`），发布前核实它含 `mod.json`、桌面主类 `logicsugar.LogicSugarMod` 与 `classes.dex`。
+- 一个 Release 必须有且只有一个 `.jar` 资产，即 `deploy` 的合并 jar（上传名 `LogicSugar.jar`），发布前核实它含 `mod.json`、桌面主类 `logicsugar.LogicSugarMod` 与 `classes.dex`。
 - 严禁把 `*-desktop.jar`、`*-android.jar`、`LogicSugar-d8-input.jar` 等中间产物传上 Release。
 - 发布后用 API 复查：
   ```bash
@@ -98,6 +105,6 @@ Mindustry 游戏内安装器取 Release API 返回的**第一个 `.jar`**，且�
   ```
   发现多余 `.jar` 立即删除。
 
-## CI
+## CI 与发布
 
-`.github/workflows/pr.yml` 是仓库内唯一的 workflow：PR 与 main 推送触发，ubuntu + Temurin 17，检查固定使用 Mindustry v160.1 标签对应的 commit；本地可用 `-PmindustryJar=<path>` 指向同版本 JAR，再跑 `bash ./gradlew --no-daemon check`。它只做检查，不产出也不上传任何发布资产。
+`.github/workflows/pr.yml` 是仓库内唯一的 workflow：PR、push 和手动重试均使用 ubuntu + Temurin 17，检查固定使用 Mindustry v160.1 标签对应的 commit；本地可用 `-PmindustryJar=<path>` 指向同版本 JAR，再跑 `bash ./gradlew --no-daemon check`。检查成功后上传固定文件名 `LogicSugar.jar` 的 Actions artifact。只有 main 上的成功 push（或 main 上的手动重试）会运行发布 job；新版本 jar 在推送版本提交前也会上传为 `LogicSugar-v<version>` release-candidate artifact，发布资产仅有 `LogicSugar.jar`，不会上传桌面 / Android 中间 jar。版本 bump commit 带 `[skip ci]`，避免递归触发 workflow。
